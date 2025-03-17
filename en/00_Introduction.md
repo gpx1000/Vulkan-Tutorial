@@ -20,7 +20,7 @@ graphics driver will do a lot less hand holding, which means that you will have
 to do more work in your application to ensure correct behavior.
 
 The takeaway message here is that Vulkan is not for everyone. It is targeted at
-programmers who are enthusiastic about high performance computer graphics, and
+programmers who are enthusiastic about high performance computer graphics and
 are willing to put some work in. If you are more interested in game development,
 rather than computer graphics, then you may wish to stick to OpenGL or Direct3D,
 which will not be deprecated in favor of Vulkan anytime soon. Another
@@ -28,12 +28,12 @@ alternative is to use an engine like [Unreal Engine](https://en.wikipedia.org/wi
 or [Unity](https://en.wikipedia.org/wiki/Unity_(game_engine)), which will be
 able to use Vulkan while exposing a much higher level API to you.
 
-With that out of the way, let's cover some prerequisites for following this
+With that out of the way, let's cover some prerequisites for the following this
 tutorial:
 
 * A graphics card and driver compatible with Vulkan ([NVIDIA](https://developer.nvidia.com/vulkan-driver), [AMD](http://www.amd.com/en-us/innovations/software-technologies/technologies-gaming/vulkan), [Intel](https://software.intel.com/en-us/blogs/2016/03/14/new-intel-vulkan-beta-1540204404-graphics-driver-for-windows-78110-1540), [Apple Silicon (Or the Apple M1)](https://www.phoronix.com/scan.php?page=news_item&px=Apple-Silicon-Vulkan-MoltenVK))
 * Experience with C++ (familiarity with RAII, initializer lists)
-* A compiler with decent support of C++17 features (Visual Studio 2017+, GCC 7+, Or Clang 5+)
+* A compiler with decent support of C++20 features (Visual Studio 2017+, GCC 7+, Or Clang 5+)
 * Some existing experience with 3D computer graphics
 
 This tutorial will not assume knowledge of OpenGL or Direct3D concepts, but it
@@ -46,11 +46,19 @@ for a great introduction of computer graphics concepts. Some other great compute
 * Vulkan being used in a real engine in the open-source [Quake](https://github.com/Novum/vkQuake) and [DOOM 3](https://github.com/DustinHLand/vkDOOM3)
 
 You can use C instead of C++ if you want, but you will have to use a different
-linear algebra library and you will be on your own in terms of code structuring.
+linear algebra library, and you will be on your own in terms of code structuring.
 We will use C++ features like classes and RAII to organize logic and resource
 lifetimes. There are also two alternative versions of this tutorial available for Rust developers: [Vulkano based](https://github.com/bwasty/vulkan-tutorial-rs), [Vulkanalia based](https://kylemayes.github.io/vulkanalia).
 
-To make it easier to follow along for developers using other programming languages, and to get some experience with the base API we'll be using the original C API to work with Vulkan. If you are using C++, however, you may prefer using the newer [Vulkan-Hpp](https://github.com/KhronosGroup/Vulkan-Hpp) bindings that abstract some of the dirty work and help prevent certain classes of errors.
+To make it easier to follow along for developers using other programming languages,
+and to get some experience with the base API, we suggest using the original C API to work with Vulkan.
+As we're using C++, however, and in an effort to make this experience easier,
+we'll use [Vulkan-Hpp](https://github.com/KhronosGroup/Vulkan-Hpp) bindings
+that abstract some of the dirty work and help prevent certain classes of errors.
+
+In addition to the base Vulkan-Hpp,
+we're using the new Vulkan-Hpp C++ module and the raii versions of all Vulkan objects.
+An older Vulkan Tutorial which demonstrates the original C API is still available; that tutorial only requires C++17.
 
 ## E-book
 
@@ -70,39 +78,42 @@ the [GLM library](http://glm.g-truc.net/) for linear algebra operations and
 [GLFW](http://www.glfw.org/) for window creation. The tutorial will cover how
 to set these up on Windows with Visual Studio, and on Ubuntu Linux with GCC.
 
-After that we'll implement all of the basic components of a Vulkan program that
+After that, we'll implement all the basic components of a Vulkan program that
 are necessary to render your first triangle. Each chapter will follow roughly
 the following structure:
 
 * Introduce a new concept and its purpose
-* Use all of the relevant API calls to integrate it into your program
+* Use all the relevant API calls to integrate it into your program
 * Abstract parts of it into helper functions
 
 Although each chapter is written as a follow-up on the previous one, it is also
 possible to read the chapters as standalone articles introducing a certain
-Vulkan feature. That means that the site is also useful as a reference. All of
-the Vulkan functions and types are linked to the specification, so you can click
-them to learn more. Vulkan is a very new API, so there may be some shortcomings
-in the specification itself. You are encouraged to submit feedback to
+Vulkan feature.
+
+That means that the site is also useful as a reference. All the Vulkan functions
+and types are linked to the specification, so you can click them to learn more.
+Vulkan is a very new API, so there may be some shortcomings in the specification itself.
+
+You are encouraged to submit feedback to
 [this Khronos repository](https://github.com/KhronosGroup/Vulkan-Docs).
 
 As mentioned before, the Vulkan API has a rather verbose API with many
 parameters to give you maximum control over the graphics hardware. This causes
 basic operations like creating a texture to take a lot of steps that have to be
-repeated every time. Therefore we'll be creating our own collection of helper
+repeated every time. Therefore, we'll be creating our own collection of helper
 functions throughout the tutorial.
 
 Every chapter will also conclude with a link to the full code listing up to that
 point. You can refer to it if you have any doubts about the structure of the
-code, or if you're dealing with a bug and want to compare. All of the code files
+code, or if you're dealing with a bug and want to compare. All the code files
 have been tested on graphics cards from multiple vendors to verify correctness.
 Each chapter also has a comment section at the end where you can ask any
-questions that are relevant to the specific subject matter. Please specify your
+questions that are relevant to the specific subject. Please specify your
 platform, driver version, source code, expected behavior and actual behavior to
 help us help you.
 
 This tutorial is intended to be a community effort. Vulkan is still a very new
-API and best practices have not really been established yet. If you have any
+API, and best practices have not really been established yet. If you have any
 type of feedback on the tutorial and site itself, then please don't hesitate to
 submit an issue or pull request to the [GitHub repository](https://github.com/Overv/VulkanTutorial).
 You can *watch* the repository to be notified of updates to the tutorial.

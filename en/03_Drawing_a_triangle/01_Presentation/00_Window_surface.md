@@ -1,42 +1,51 @@
-Since Vulkan is a platform agnostic API, it can not interface directly with the
-window system on its own. To establish the connection between Vulkan and the
-window system to present results to the screen, we need to use the WSI (Window
-System Integration) extensions. In this chapter we'll discuss the first one,
-which is `VK_KHR_surface`. It exposes a `VkSurfaceKHR` object that represents an
-abstract type of surface to present rendered images to. The surface in our
-program will be backed by the window that we've already opened with GLFW.
+Since Vulkan is a platform-agnostic API, it is not designed to interface 
+directly with the window system on its own. To establish the connection 
+between Vulkan and the window system to present results to the screen, we 
+need to use the WSI (Window System Integration) extensions. In this chapter 
+we'll discuss the first one, which is `VK_KHR_surface`. It exposes a 
+`VkSurfaceKHR` object that represents an abstract type of surface to 
+present rendered images to. The surface in our program will be backed by 
+the window that we've already opened with GLFW.
 
-The `VK_KHR_surface` extension is an instance level extension and we've actually
+The `VK_KHR_surface` extension is an instance level extension, and we've actually
 already enabled it, because it's included in the list returned by
 `glfwGetRequiredInstanceExtensions`. The list also includes some other WSI
 extensions that we'll use in the next couple of chapters.
 
 The window surface needs to be created right after the instance creation,
 because it can actually influence the physical device selection. The reason we
-postponed this is because window surfaces are part of the larger topic of
+postponed this is that window surfaces are part of the larger topic of
 render targets and presentation for which the explanation would have cluttered
 the basic setup. It should also be noted that window surfaces are an entirely
-optional component in Vulkan, if you just need off-screen rendering. Vulkan
+optional component in Vulkan if you just need off-screen rendering. Vulkan
 allows you to do that without hacks like creating an invisible window
-(necessary for OpenGL).
+(necessary for OpenGL).  Vulkan also allows you to remotely render from a 
+non-presenting GPU or remotely over the internet, or run compute 
+acceleration for AI without a render or presentation target.
+
+While GLFW will be demonstrated here, the concept of Vulkan rendering to a 
+surface is repeated as a target for any other Windowing API. This concept 
+applies to mobile and to work with direct access to the windowing manager.  
+That said, let's for now, concentrate on GLFW and see how it concretely 
+works in this tutorial.
 
 ## Window surface creation
 
 Start by adding a `surface` class member right below the debug callback.
 
 ```c++
-VkSurfaceKHR surface;
+vk::raii::SurfaceKHR surface;
 ```
 
-Although the `VkSurfaceKHR` object and its usage is platform agnostic, its
+Although the `VkSurfaceKHR` object and its usage is platform-agnostic, its
 creation isn't because it depends on window system details. For example, it
-needs the `HWND` and `HMODULE` handles on Windows. Therefore there is a
+needs the `HWND` and `HMODULE` handles on Windows. Therefore, there is a
 platform-specific addition to the extension, which on Windows is called
 `VK_KHR_win32_surface` and is also automatically included in the list from
 `glfwGetRequiredInstanceExtensions`.
 
-I will demonstrate how this platform specific extension can be used to create a
-surface on Windows, but we won't actually use it in this tutorial. It doesn't
+I will demonstrate how this platform-specific extension can be used to create a
+surface on Windows, but we won't use it in this tutorial. It doesn't
 make any sense to use a library like GLFW and then proceed to use
 platform-specific code anyway. GLFW actually has `glfwCreateWindowSurface` that
 handles the platform differences for us. Still, it's good to see what it does
@@ -68,7 +77,12 @@ The `glfwGetWin32Window` function is used to get the raw `HWND` from the GLFW
 window object. The `GetModuleHandle` call returns the `HINSTANCE` handle of the
 current process.
 
-After that the surface can be created with `vkCreateWin32SurfaceKHR`, which includes a parameter for the instance, surface creation details, custom allocators and the variable for the surface handle to be stored in. Technically this is a WSI extension function, but it is so commonly used that the standard Vulkan loader includes it, so unlike other extensions you don't need to explicitly load it.
+After that the surface can be created with `vkCreateWin32SurfaceKHR`, which 
+includes a parameter for the instance, surface creation details, custom 
+allocators and the variable for the surface handle to be stored in. 
+Technically, this is a WSI extension function, but it is so commonly used 
+that the standard Vulkan loader includes it, so unlike other extensions, you 
+don't need to explicitly load it.
 
 ```c++
 if (vkCreateWin32SurfaceKHR(instance, &createInfo, nullptr, &surface) != VK_SUCCESS) {
@@ -104,65 +118,48 @@ implementation of the function very straightforward:
 
 ```c++
 void createSurface() {
-    if (glfwCreateWindowSurface(instance, window, nullptr, &surface) != VK_SUCCESS) {
+    VkSurfaceKHR       _surface;
+    if (glfwCreateWindowSurface(**instance, window, nullptr, &_surface) != 0) {
         throw std::runtime_error("failed to create window surface!");
     }
+    surface = std::make_unique<vk::raii::SurfaceKHR>(*instance, _surface);
 }
 ```
+
+However, as you see in the above, GLFW only deals with the Vulkan C API.  
+The VkSurfaceKHR object is a C API object.  Thankfully, it can natively be 
+promoted to the C++ wrapper, and that's what we do here.
 
 The parameters are the `VkInstance`, GLFW window pointer, custom allocators and
 pointer to `VkSurfaceKHR` variable. It simply passes through the `VkResult` from
 the relevant platform call. GLFW doesn't offer a special function for destroying
-a surface, but that can easily be done through the original API:
-
-```c++
-void cleanup() {
-        ...
-        vkDestroySurfaceKHR(instance, surface, nullptr);
-        vkDestroyInstance(instance, nullptr);
-        ...
-    }
-```
-
-Make sure that the surface is destroyed before the instance.
+a surface, but wrapping it in our raii SurfaceKHR object will let Vulkan 
+RAII take care of that for us.
 
 ## Querying for presentation support
 
 Although the Vulkan implementation may support window system integration, that
-does not mean that every device in the system supports it. Therefore we need to
-extend `isDeviceSuitable` to ensure that a device can present images to the
+does not mean that every device in the system supports it. Therefore, we need to
+extend `createLogicalDevice` to ensure that a device can present images to the
 surface we created. Since the presentation is a queue-specific feature, the
 problem is actually about finding a queue family that supports presenting to the
 surface we created.
 
 It's actually possible that the queue families supporting drawing commands and
-the ones supporting presentation do not overlap. Therefore we have to take into
-account that there could be a distinct presentation queue by modifying the
-`QueueFamilyIndices` structure:
+the queue families supporting presentation do not overlap. Therefore, we 
+have to take into account that there could be a distinct presentation queue.
 
-```c++
-struct QueueFamilyIndices {
-    std::optional<uint32_t> graphicsFamily;
-    std::optional<uint32_t> presentFamily;
-
-    bool isComplete() {
-        return graphicsFamily.has_value() && presentFamily.has_value();
-    }
-};
-```
-
-Next, we'll modify the `findQueueFamilies` function to look for a queue family
-that has the capability of presenting to our window surface. The function to
-check for that is `vkGetPhysicalDeviceSurfaceSupportKHR`, which takes the
-physical device, queue family index and surface as parameters. Add a call to it
+Next, we'll look for a queue family that has the capability of presenting 
+to our window surface. The function to check for that is 
+`vkGetPhysicalDeviceSurfaceSupportKHR`, which takes the  physical device, 
+queue family index and surface as parameters. Add a call to it
 in the same loop as the `VK_QUEUE_GRAPHICS_BIT`:
 
 ```c++
-VkBool32 presentSupport = false;
-vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+VkBool32 presentSupport = physicalDevice->getSurfaceSupportKHR( graphicsIndex, *surface );
 ```
 
-Then simply check the value of the boolean and store the presentation family
+Then check the value of the boolean and store the presentation family
 queue index:
 
 ```c++
@@ -184,50 +181,77 @@ create the presentation queue and retrieve the `VkQueue` handle. Add a member
 variable for the handle:
 
 ```c++
-VkQueue presentQueue;
+vk::raii::Queue presentQueue;
 ```
 
-Next, we need to have multiple `VkDeviceQueueCreateInfo` structs to create a
-queue from both families. An elegant way to do that is to create a set of all
-unique queue families that are necessary for the required queues:
+Next, we need to modify the filtering logic to find the best queue families 
+to use as we detect them.  Here's how we do it in one function at the device 
+creation functions:
 
 ```c++
-#include <set>
+void createLogicalDevice() {
+    // find the index of the first queue family that supports graphics
+    std::vector<vk::QueueFamilyProperties> queueFamilyProperties = physicalDevice->getQueueFamilyProperties();
 
-...
+    // get the first index into queueFamilyProperties which supports graphics
+    auto graphicsQueueFamilyProperty =
+      std::find_if( queueFamilyProperties.begin(),
+                    queueFamilyProperties.end(),
+                    []( vk::QueueFamilyProperties const & qfp ) { return qfp.queueFlags & vk::QueueFlagBits::eGraphics; } );
 
-QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+    autographicsIndex = static_cast<uint32_t>( std::distance( queueFamilyProperties.begin(), graphicsQueueFamilyProperty ) );
 
-std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-std::set<uint32_t> uniqueQueueFamilies = {indices.graphicsFamily.value(), indices.presentFamily.value()};
+    // determine a queueFamilyIndex that supports present
+    // first check if the graphicsIndex is good enough
+    auto presentIndex = physicalDevice->getSurfaceSupportKHR( graphicsIndex, *surface )
+                                       ? graphicsIndex
+                                       : static_cast<uint32_t>( queueFamilyProperties.size() );
+    if ( presentIndex == queueFamilyProperties.size() )
+    {
+        // the graphicsIndex doesn't support present -> look for another family index that supports both
+        // graphics and present
+        for ( size_t i = 0; i < queueFamilyProperties.size(); i++ )
+        {
+            if ( ( queueFamilyProperties[i].queueFlags & vk::QueueFlagBits::eGraphics ) &&
+                 physicalDevice->getSurfaceSupportKHR( static_cast<uint32_t>( i ), *surface ) )
+            {
+                graphicsIndex = static_cast<uint32_t>( i );
+                presentIndex  = graphicsIndex;
+                break;
+            }
+        }
+        if ( presentIndex == queueFamilyProperties.size() )
+        {
+            // there's nothing like a single family index that supports both graphics and present -> look for another
+            // family index that supports present
+            for ( size_t i = 0; i < queueFamilyProperties.size(); i++ )
+            {
+                if ( physicalDevice->getSurfaceSupportKHR( static_cast<uint32_t>( i ), *surface ) )
+                {
+                    presentIndex = static_cast<uint32_t>( i );
+                    break;
+                }
+            }
+        }
+    }
+    if ( ( graphicsIndex == queueFamilyProperties.size() ) || ( presentIndex == queueFamilyProperties.size() ) )
+    {
+        throw std::runtime_error( "Could not find a queue for graphics or present -> terminating" );
+    }
 
-float queuePriority = 1.0f;
-for (uint32_t queueFamily : uniqueQueueFamilies) {
-    VkDeviceQueueCreateInfo queueCreateInfo{};
-    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queueCreateInfo.queueFamilyIndex = queueFamily;
-    queueCreateInfo.queueCount = 1;
-    queueCreateInfo.pQueuePriorities = &queuePriority;
-    queueCreateInfos.push_back(queueCreateInfo);
+    // create a Device
+    float                     queuePriority = 0.0f;
+    vk::DeviceQueueCreateInfo deviceQueueCreateInfo( {}, graphicsIndex, 1, &queuePriority );
+    vk::DeviceCreateInfo      deviceCreateInfo( {}, deviceQueueCreateInfo );
+
+    device = std::make_unique<vk::raii::Device>( *physicalDevice, deviceCreateInfo );
+    graphicsQueue = std::make_unique<vk::raii::Queue>( *device, graphicsIndex, 0 );
+    presentQueue = std::make_unique<vk::raii::Queue>( *device, presentIndex, 0 );
 }
 ```
 
-And modify `VkDeviceCreateInfo` to point to the vector:
-
-```c++
-createInfo.queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size());
-createInfo.pQueueCreateInfos = queueCreateInfos.data();
-```
-
-If the queue families are the same, then we only need to pass its index once.
-Finally, add a call to retrieve the queue handle:
-
-```c++
-vkGetDeviceQueue(device, indices.presentFamily.value(), 0, &presentQueue);
-```
-
 In case the queue families are the same, the two handles will most likely have
-the same value now. In the next chapter we're going to look at swap chains and
-how they give us the ability to present images to the surface.
+the same value now. In the next chapter, we're going to look at swap chains and
+how they allow us to present images to the surface.
 
 [C++ code](/code/05_window_surface.cpp)

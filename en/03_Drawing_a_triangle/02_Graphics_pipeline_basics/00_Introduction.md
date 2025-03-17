@@ -1,5 +1,5 @@
-Over the course of the next few chapters we'll be setting up a graphics pipeline
-that is configured to draw our first triangle. The graphics pipeline is the
+Over the course of the next few chapters, we'll be setting up a graphics pipeline
+ configured to draw our first triangle. The graphics pipeline is the
 sequence of operations that take the vertices and textures of your meshes all
 the way to the pixels in the render targets. A simplified overview is displayed
 below:
@@ -20,13 +20,17 @@ brick walls and staircases look less flat when they are nearby.
 
 The *geometry shader* is run on every primitive (triangle, line, point) and can
 discard it or output more primitives than came in. This is similar to the
-tessellation shader, but much more flexible. However, it is not used much in
+tessellation shader but much more flexible. However, it is used little in
 today's applications because the performance is not that good on most graphics
-cards except for Intel's integrated GPUs.
+cards except for Intel's integrated GPUs.  Also, almost all geometry shader 
+use cases can be fixed with a more modern Mesh shader pipeline; which like 
+ray tracing is a wholly new pipeline solution, so it exists outside the 
+standard graphics pipeline setup.  We'll discuss that pipeline in a future 
+tutorial section.
 
-The *rasterization* stage discretizes the primitives into *fragments*. These are
+The *rasterization* stage breaks the primitives into *fragments*. These are
 the pixel elements that they fill on the framebuffer. Any fragments that fall
-outside the screen are discarded and the attributes outputted by the vertex
+outside the screen are discarded, and the attributes outputted by the vertex
 shader are interpolated across the fragments, as shown in the figure. Usually
 the fragments that are behind other primitive fragments are also discarded here
 because of depth testing.
@@ -57,17 +61,17 @@ to being able to change any pipeline settings at will with calls like
 completely immutable, so you must recreate the pipeline from scratch if you want
 to change shaders, bind different framebuffers or change the blend function. The
 disadvantage is that you'll have to create a number of pipelines that represent
-all of the different combinations of states you want to use in your rendering
-operations. However, because all of the operations you'll be doing in the
+all the different combinations of states you want to use in your rendering
+operations. However, because all the operations you'll be doing in the
 pipeline are known in advance, the driver can optimize for it much better.
 
 Some of the programmable stages are optional based on what you intend to do. For
 example, the tessellation and geometry stages can be disabled if you are just
-drawing simple geometry. If you are only interested in depth values then you can
+drawing simple geometry. If you are only interested in depth values, then you can
 disable the fragment shader stage, which is useful for [shadow map](https://en.wikipedia.org/wiki/Shadow_mapping)
 generation.
 
-In the next chapter we'll first create the two programmable stages required to
+In the next chapter, we'll first create the two programmable stages required to
 put a triangle onto the screen: the vertex shader and fragment shader. The
 fixed-function configuration like blending mode, viewport, rasterization will be
 set up in the chapter after that. The final part of setting up the graphics
