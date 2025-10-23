@@ -194,7 +194,7 @@ Now we just need to pass these per-vertex colors to the fragment shader so it
 can output their interpolated values to the framebuffer. Add an output for color
 to the vertex shader and write to it in the `vertMain` function:
 
-[,glsl]
+[,slang]
 ----
 struct VertexOutput {
     float3 color;
@@ -212,7 +212,7 @@ VertexOutput vertMain(uint vid : SV_VertexID) {
 
 Next, we need to add a matching parameter in the fragment shader:
 
-[,glsl]
+[,slang]
 ----
 [shader("fragment")]
 float4 fragMain(VertexOutput inVert) : SV_Target
@@ -349,7 +349,7 @@ Then you can add the Slang build step to your target like this:
 
 [,cmake]
 ----
-add_slang_shader_target( foo SOURCES ${SHADER_SLANG_SOURCES})
+add_slang_shader_target(foo SOURCES ${SHADER_SLANG_SOURCES})
 add_dependencies(bar foo)
 ----
 
@@ -363,14 +363,16 @@ write a simple helper function to load the binary data from the files.
 ----
 #include <fstream>
 
-...
+/* ... */
 
-static std::vector<char> readFile(const std::string& filename) {
-    std::ifstream file(filename, std::ios::ate | std::ios::binary);
+static std::vector<char> readFile(const std::string &filename)
+{
+	std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
-    if (!file.is_open()) {
-        throw std::runtime_error("failed to open file!");
-    }
+	if (!file.is_open())
+	{
+		throw std::runtime_error("failed to open file!");
+	}
 }
 ----
 
@@ -412,8 +414,9 @@ of the two shaders:
 
 [,c++]
 ----
-void createGraphicsPipeline() {
-    auto shaderCode = readFile("shaders/slang.spv");
+void createGraphicsPipeline()
+{
+	auto shaderCode = readFile("shaders/slang.spv");
 }
 ----
 
@@ -428,36 +431,72 @@ Before we can pass the code to the pipeline, we have to wrap it in a
 `VkShaderModule` object. Let's create a helper function `createShaderModule` to
 do that.
 
-[,c++]
+[source,multilang,c++,c]
 ----
-[[nodiscard]] vk::raii::ShaderModule createShaderModule(const std::vector<char>& code) const {
+// START c++
+[[nodiscard]] vk::raii::ShaderModule createShaderModule(const std::vector<char> &code) const
+{
 
 }
+// END c++
+
+// START c
+[[nodiscard]] VkShaderModule createShaderModule(const std::vector<char> &code) const
+{
+
+}
+// END c
 ----
 
 The function will take a buffer with the bytecode as parameter and create a
 `VkShaderModule` from it.
 
-Creating a shader module is straightforward, we only need to specify a pointer to the
-buffer with the bytecode and the length of it. This information is specified in
-a `VkShaderModuleCreateInfo` structure. The one catch is that the size of the
-bytecode is specified in bytes, but the bytecode pointer is a `uint32_t` pointer
-rather than a `char` pointer. Therefore, we will need to cast the pointer with
-`reinterpret_cast` as shown below. When you perform a cast like this, you also
-need to ensure that the data satisfies the alignment requirements of `uint32_t`.
-Lucky for us, the data is stored in an `std::vector` where the default allocator
-already ensures that the data satisfies the worst case alignment requirements.
+Creating a shader module is straightforward, we only need to specify a pointer
+to the buffer with the bytecode and the length of it. This information is
+specified in a `VkShaderModuleCreateInfo` structure. The one catch is that the
+size of the bytecode is specified in bytes, but the bytecode pointer is a
+`uint32_t` pointer rather than a `char` pointer. Therefore, we will need to cast
+the pointer with `reinterpret_cast` as shown below. When you perform a cast like
+this, you also need to ensure that the data satisfies the alignment requirements
+of `uint32_t`. Lucky for us, the data is stored in an `std::vector` where the
+default allocator already ensures that the data satisfies the worst case
+alignment requirements. The `VkShaderModuleCreateInfo` struct should look
+something like this:
 
-[,c++]
+[source,multilang,c++,c]
 ----
-vk::ShaderModuleCreateInfo createInfo{ .codeSize = code.size() * sizeof(char), .pCode = reinterpret_cast<const uint32_t*>(code.data()) };
+// START c++
+vk::ShaderModuleCreateInfo createInfo{
+    .codeSize = code.size() * sizeof(char),
+    .pCode    = reinterpret_cast<const uint32_t *>(code.data()),
+};
+
+// END c++
+
+// START c
+VkShaderModuleCreateInfo createInfo{
+    .sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    .codeSize = code.size() * sizeof(char),
+    .pCode    = reinterpret_cast<const uint32_t *>(code.data()),
+};
+// END c
 ----
 
 The `VkShaderModule` can then be created with a call to `vkCreateShaderModule`:
 
-[,c++]
+[source,multilang,c++,c]
 ----
-vk::raii::ShaderModule shaderModule{ device, createInfo };
+// START c++
+vk::raii::ShaderModule shaderModule{device, createInfo};
+// END c++
+
+// START c
+VkShaderModule shaderModule;
+if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
+{
+	throw std::runtime_error("failed to create shader module!");
+}
+// END c
 ----
 
 The parameters are the same as those in previous object creation functions: the
@@ -466,19 +505,40 @@ allocators and handle output variable. The buffer with the code can be freed
 immediately after creating the shader module. Remember to return the created
 shader module:
 
-[,c++]
+[source,multilang,c++,c]
 ----
+// START c++
 return shaderModule;
+// END c++
+
+// START c
+return shaderModule;
+// END c
 ----
 
-Shader modules are just a thin wrapper around the shader bytecode that we've previously loaded from a file and the functions defined in it.
-The compilation and linking of the SPIR-V bytecode to machine code for execution by the GPU doesn't happen until the graphics pipeline is created.
-That means that we're allowed to destroy the shader modules again as soon as pipeline creation is finished, which is why we'll make them local variables in the `createGraphicsPipeline` function instead of class members:
+Shader modules are just a thin wrapper around the shader bytecode that we've
+previously loaded from a file and the functions defined in it. The compilation
+and linking of the SPIR-V bytecode to machine code for execution by the GPU
+doesn't happen until the graphics pipeline is created. That means that we're
+allowed to destroy the shader modules again as soon as pipeline creation is
+finished, which is why we'll make them local variables in the
+`createGraphicsPipeline` function instead of class members:
 
-[,c++]
+[source,multilang,c++,c]
 ----
-void createGraphicsPipeline() {
-    vk::raii::ShaderModule shaderModule = createShaderModule(readFile("shaders/slang.spv"));
+// START c++
+void createGraphicsPipeline()
+{
+	vk::raii::ShaderModule shaderModule = createShaderModule(readFile("shaders/slang.spv"));
+}
+// END c++
+
+// START c
+void createGraphicsPipeline()
+{
+	VkShaderModule shaderModule = createShaderModule(readFile("shaders/slang.spv"));
+}
+// END c
 ----
 
 == Shader stage creation
@@ -488,47 +548,83 @@ pipeline stage through `VkPipelineShaderStageCreateInfo` structures as part
 of the actual pipeline creation process.
 
 We'll start by filling in the structure for the vertex shader, again in the
-`createGraphicsPipeline` function.
+`createGraphicsPipeline` function:
 
-[,c++]
+[source,multilang,c++,c]
 ----
-vk::PipelineShaderStageCreateInfo vertShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eVertex, .module = shaderModule,  .pName = "vertMain" };
+// START c++
+vk::PipelineShaderStageCreateInfo vertShaderStageInfo{
+    .stage  = vk::ShaderStageFlagBits::eVertex,
+    .module = shaderModule,
+    .pName  = "vertMain",
+};
+// END c++
+
+// START c
+VkPipelineShaderStageCreateInfo vertShaderStageInfo{
+    .sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+    .stage  = VK_SHADER_STAGE_VERTEX_BIT,
+    .module = shaderModule,
+    .pName  = "vertMain",
+};
+// END c
 ----
 
-The first two parameters are the flags and the stage that we're operating
-in. The next two parameters specify the shader module containing the code, and
-the function to invoke, known as the _entrypoint_.
-That means that it's possible to combine multiple fragment shaders into a
-single shader module and use different entry points to differentiate between
- their behaviors.
+The first two parameters are the flags and the stage that we're operating in.
+The next two parameters specify the shader module containing the code, and the
+function to invoke, known as the _entrypoint_. That means that it's possible to
+combine multiple fragment shaders into a single shader module and use different
+entry points to differentiate between their behaviors.
 
-There is one more (optional) member, `pSpecializationInfo`, which we won't
- be using here, but is worth discussing. It allows you to specify values for
- shader constants. You can use a single shader module where its behavior can
- be configured in pipeline creation by specifying different values for the
- constants used in it.
-This is more efficient than configuring the shader using variables at render
- time, because the compiler can do optimizations like eliminating `if`
- statements that depend on these values.
-If you don't have any constants like that, then you can set the member to
-`nullptr`, which our struct initialization does automatically.
+There is one more (optional) member, `pSpecializationInfo`, which we won't be
+using here, but is worth discussing. It allows you to specify values for shader
+constants. You can use a single shader module where its behavior can be
+configured in pipeline creation by specifying different values for the constants
+used in it. This is more efficient than configuring the shader using variables
+at render time, because the compiler can do optimizations like eliminating `if`
+statements that depend on these values. If you don't have any constants like
+that, then you can set the member to `nullptr`, which our struct initialization
+does automatically.
 
 Modifying the structure to suit the fragment shader is easy:
 
-[,c++]
+[source,multilang,c++,c]
 ----
-vk::PipelineShaderStageCreateInfo fragShaderStageInfo{ .stage = vk::ShaderStageFlagBits::eFragment, .module = shaderModule, .pName = "fragMain" };
+// START c++
+vk::PipelineShaderStageCreateInfo fragShaderStageInfo{
+    .stage  = vk::ShaderStageFlagBits::eFragment,
+    .module = shaderModule,
+    .pName  = "fragMain",
+};
+// END c++
+
+// START c
+VkPipelineShaderStageCreateInfo fragShaderStageInfo{
+    .sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+    .stage  = VK_SHADER_STAGE_FRAGMENT_BIT,
+    .module = shaderModule,
+    .pName  = "fragMain",
+};
+// END c
 ----
 
-Finish by defining an array that contains these two structs, which we'll later use to reference them in the actual pipeline creation step.
+Finish by defining an array that contains these two structs, which we'll later
+use to reference them in the actual pipeline creation step:
 
-[,c++]
+[source,multilang,c++,c]
 ----
+// START c++
 vk::PipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+// END c++
+
+// START c
+VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+// END c
 ----
 
 That's all there is describing the programmable stages of the pipeline.
-In the xref:./02_Fixed_functions.adoc[next chapter,] we'll look at the fixed-function stages.
+In the xref:./02_Fixed_functions.adoc[next chapter,] we'll look at the
+fixed-function stages.
 
 link:/attachments/09_shader_modules.cpp[C{pp} code] /
 link:/attachments/09_shader_base.slang[Slang shader] /
