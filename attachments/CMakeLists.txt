@@ -51,12 +51,12 @@ if(ENABLE_CPP20_MODULE)
   endif()
 
   target_sources(VulkanCppModule
-    PUBLIC
-    FILE_SET cxx_modules TYPE CXX_MODULES
-    BASE_DIRS
-    "${Vulkan_INCLUDE_DIR}"
-    FILES
-    "${Vulkan_INCLUDE_DIR}/vulkan/vulkan.cppm"
+          PUBLIC
+          FILE_SET cxx_modules TYPE CXX_MODULES
+          BASE_DIRS
+          "${Vulkan_INCLUDE_DIR}"
+          FILES
+          "${Vulkan_INCLUDE_DIR}/vulkan/vulkan.cppm"
   )
 
 
@@ -85,12 +85,7 @@ find_program(SLANGC_EXECUTABLE slangc HINTS $ENV{VULKAN_SDK}/bin REQUIRED)
 
 function (add_shaders_target TARGET)
   cmake_parse_arguments ("SHADER" "" "CHAPTER_NAME" "SOURCES" ${ARGN})
-  if(${CMAKE_GENERATOR} MATCHES "Visual Studio.*" OR 
-      ${CMAKE_GENERATOR} MATCHES "Ninja Multi-Config")
-    set (SHADERS_DIR ${CMAKE_BINARY_DIR}/${SHADER_CHAPTER_NAME}/$<CONFIG>/shaders)
-  else()
-    set (SHADERS_DIR ${CMAKE_BINARY_DIR}/${SHADER_CHAPTER_NAME}/shaders)
-  endif()
+  set (SHADERS_DIR ${SHADER_CHAPTER_NAME}/shaders)
   add_custom_command (
     OUTPUT ${SHADERS_DIR}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_DIR}
@@ -100,8 +95,8 @@ function (add_shaders_target TARGET)
     COMMAND glslang::validator
     ARGS --target-env vulkan1.0 ${SHADER_SOURCES} --quiet
     WORKING_DIRECTORY ${SHADERS_DIR}
-    DEPENDS ${SHADER_SOURCES}
-    COMMENT "Compiling Shaders for ${TARGET}"
+    DEPENDS ${SHADERS_DIR} ${SHADER_SOURCES}
+    COMMENT "Compiling Shaders"
     VERBATIM
     )
   add_custom_target (${TARGET} DEPENDS ${SHADERS_DIR}/frag.spv ${SHADERS_DIR}/vert.spv)
@@ -109,28 +104,23 @@ endfunction ()
 
 function (add_slang_shader_target TARGET)
   cmake_parse_arguments ("SHADER" "" "CHAPTER_NAME" "SOURCES" ${ARGN})
-  if(${CMAKE_GENERATOR} MATCHES "Visual Studio.*" OR 
-      ${CMAKE_GENERATOR} MATCHES "Ninja Multi-Config")
-    set (SHADERS_DIR ${CMAKE_BINARY_DIR}/${SHADER_CHAPTER_NAME}/$<CONFIG>/shaders)
-  else()
-    set (SHADERS_DIR ${CMAKE_BINARY_DIR}/${SHADER_CHAPTER_NAME}/shaders)
-  endif()
+  set (SHADERS_DIR ${SHADER_CHAPTER_NAME}/shaders)
   file(GLOB HAS_COMPUTE ${CHAPTER_SHADER}.comp)
   set (ENTRY_POINTS -entry vertMain -entry fragMain)
   if(HAS_COMPUTE)
     list(APPEND ENTRY_POINTS -entry compMain)
   endif()
   add_custom_command (
-    OUTPUT ${SHADERS_DIR}
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_DIR}
+          OUTPUT ${SHADERS_DIR}
+          COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_DIR}
   )
   add_custom_command (
-    OUTPUT  ${SHADERS_DIR}/slang.spv
-    COMMAND ${SLANGC_EXECUTABLE} ${SHADER_SOURCES} -target spirv -profile spirv_1_4+spvRayQueryKHR -emit-spirv-directly -fvk-use-entrypoint-name ${ENTRY_POINTS} -o slang.spv
-    WORKING_DIRECTORY ${SHADERS_DIR}
-    DEPENDS ${SHADER_SOURCES}
-    COMMENT "Compiling Slang Shaders for ${TARGET}"
-    VERBATIM
+          OUTPUT  ${SHADERS_DIR}/slang.spv
+          COMMAND ${SLANGC_EXECUTABLE} ${SHADER_SOURCES} -target spirv -profile spirv_1_4+spvRayQueryKHR -emit-spirv-directly -fvk-use-entrypoint-name ${ENTRY_POINTS} -o slang.spv
+          WORKING_DIRECTORY ${SHADERS_DIR}
+          DEPENDS ${SHADERS_DIR} ${SHADER_SOURCES}
+          COMMENT "Compiling Slang Shaders"
+          VERBATIM
   )
   add_custom_target (${TARGET} DEPENDS ${SHADERS_DIR}/slang.spv)
 endfunction()
@@ -152,10 +142,9 @@ function (add_chapter CHAPTER_NAME)
   # Define VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS to treat VK_ERROR_OUT_OF_DATE_KHR as a success code
   target_compile_definitions(${CHAPTER_NAME} PRIVATE "VULKAN_HPP_HANDLE_ERROR_OUT_OF_DATE_AS_SUCCESS" )
 
-  if(WIN32)
-    if(${CMAKE_GENERATOR} MATCHES "Visual Studio.*")
-      set_target_properties(${CHAPTER_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/${CHAPTER_NAME}")
-    endif()
+  # Set working directory for Visual Studio
+  if(MSVC)
+    set_target_properties(${CHAPTER_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/${CHAPTER_NAME}")
   endif()
 
   if (DEFINED CHAPTER_SHADER)
@@ -177,42 +166,12 @@ function (add_chapter CHAPTER_NAME)
   if (DEFINED CHAPTER_MODELS)
     list(TRANSFORM CHAPTER_MODELS PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/assets/")
     file (COPY ${CHAPTER_MODELS} DESTINATION ${CMAKE_BINARY_DIR}/${CHAPTER_NAME}/models)
-    
-    if(${CMAKE_GENERATOR} MATCHES "Visual Studio.*" OR 
-      ${CMAKE_GENERATOR} MATCHES "Ninja Multi-Config")
-      sync_directory(
-        "${CMAKE_BINARY_DIR}/${CHAPTER_NAME}/models"
-        "${CMAKE_BINARY_DIR}/${CHAPTER_NAME}/$<CONFIG>/models"
-        ${CHAPTER_NAME}
-        "${CHAPTER_NAME} - Models"
-      )
-    endif()
   endif ()
   if (DEFINED CHAPTER_TEXTURES)
     list(TRANSFORM CHAPTER_TEXTURES PREPEND "${CMAKE_CURRENT_SOURCE_DIR}/assets/")
     file (COPY ${CHAPTER_TEXTURES} DESTINATION ${CMAKE_BINARY_DIR}/${CHAPTER_NAME}/textures)
-
-    if(${CMAKE_GENERATOR} MATCHES "Visual Studio.*" OR 
-      ${CMAKE_GENERATOR} MATCHES "Ninja Multi-Config")
-      sync_directory(
-        "${CMAKE_BINARY_DIR}/${CHAPTER_NAME}/textures"
-        "${CMAKE_BINARY_DIR}/${CHAPTER_NAME}/$<CONFIG>/textures"
-        ${CHAPTER_NAME}
-        "${CHAPTER_NAME} - Textures"
-      )  
-    endif()
   endif ()
 endfunction ()
-
-function(sync_directory SRC_DIR DST_DIR TARGET_NAME LABEL)
-  add_custom_command(
-    TARGET ${TARGET_NAME}
-    POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${DST_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different "${SRC_DIR}" "${DST_DIR}"
-    COMMENT "${LABEL}: Syncing directory"
-  )
-endfunction()
 
 add_chapter (00_base_code)
 

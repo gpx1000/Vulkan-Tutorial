@@ -22,53 +22,55 @@ find_package (KTX REQUIRED)
 # Find or download Vulkan-Hpp headers matching the Vulkan SDK/NDK version
 find_package(VulkanHpp REQUIRED)
 
-if(ENABLE_CPP20_MODULE)
-    # Set up Vulkan C++ module for this standalone project
-    add_library(VulkanCppModule)
-    add_library(Vulkan::cppm ALIAS VulkanCppModule)
-
-    target_compile_definitions(VulkanCppModule
-            PUBLIC VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1 VULKAN_HPP_NO_STRUCT_CONSTRUCTORS=1
-    )
-    target_include_directories(VulkanCppModule
-            PUBLIC
-            "${Vulkan_INCLUDE_DIR}"
-            "${VulkanHpp_INCLUDE_DIRS}"
-    )
-    target_link_libraries(VulkanCppModule
-            PUBLIC
-            Vulkan::Vulkan
-    )
-
-    set_target_properties(VulkanCppModule PROPERTIES CXX_STANDARD 20)
-
-    target_sources(VulkanCppModule
-            PUBLIC
-            FILE_SET cxx_modules TYPE CXX_MODULES
-            BASE_DIRS
-            "${VulkanHpp_CPPM_DIR}"
-            FILES
-            "${VulkanHpp_CPPM_DIR}/vulkan/vulkan.cppm"
-    )
-
-    # MSVC-specific options to improve module support
-    if(MSVC)
-        target_compile_options(VulkanCppModule PRIVATE
-            /std:c++latest
-            /permissive-
-            /Zc:__cplusplus
-            /EHsc
-            /Zc:preprocessor
+if(NOT TARGET VulkanCppModule)
+    if(ENABLE_CPP20_MODULE)
+        # Set up Vulkan C++ module for this standalone project
+        add_library(VulkanCppModule)
+        add_library(Vulkan::cppm ALIAS VulkanCppModule)
+    
+        target_compile_definitions(VulkanCppModule
+                PUBLIC VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1 VULKAN_HPP_NO_STRUCT_CONSTRUCTORS=1
         )
+        target_include_directories(VulkanCppModule
+                PUBLIC
+                "${Vulkan_INCLUDE_DIR}"
+                "${VulkanHpp_INCLUDE_DIRS}"
+        )
+        target_link_libraries(VulkanCppModule
+                PUBLIC
+                Vulkan::Vulkan
+        )
+    
+        set_target_properties(VulkanCppModule PROPERTIES CXX_STANDARD 20)
+    
+        target_sources(VulkanCppModule
+                PUBLIC
+                FILE_SET cxx_modules TYPE CXX_MODULES
+                BASE_DIRS
+                "${VulkanHpp_CPPM_DIR}"
+                FILES
+                "${VulkanHpp_CPPM_DIR}/vulkan/vulkan.cppm"
+        )
+    
+        # MSVC-specific options to improve module support
+        if(MSVC)
+            target_compile_options(VulkanCppModule PRIVATE
+                /std:c++latest
+                /permissive-
+                /Zc:__cplusplus
+                /EHsc
+                /Zc:preprocessor
+            )
+        endif()
+    else()
+        add_library(VulkanCppModule INTERFACE)
+        add_library(Vulkan::cppm ALIAS VulkanCppModule)
+        target_link_libraries(VulkanCppModule INTERFACE Vulkan::Vulkan)
+        target_compile_definitions(VulkanCppModule
+                INTERFACE VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1 VULKAN_HPP_NO_STRUCT_CONSTRUCTORS=1
+        )
+        target_include_directories(VulkanCppModule INTERFACE "${VulkanHpp_INCLUDE_DIRS}")
     endif()
-else()
-    add_library(VulkanCppModule INTERFACE)
-    add_library(Vulkan::cppm ALIAS VulkanCppModule)
-    target_link_libraries(VulkanCppModule INTERFACE Vulkan::Vulkan)
-    target_compile_definitions(VulkanCppModule
-            INTERFACE VULKAN_HPP_DISPATCH_LOADER_DYNAMIC=1 VULKAN_HPP_NO_STRUCT_CONSTRUCTORS=1
-    )
-    target_include_directories(VulkanCppModule INTERFACE "${VulkanHpp_INCLUDE_DIRS}")
 endif()
 
 
