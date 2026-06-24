@@ -34,7 +34,7 @@ This tutorial series is organized into several key areas:
 9.  **Mobile & Embedded Compute** - Running compute on Android and embedded devices, optimizing for power and bandwidth, and going headless beyond the phone.
 
 === Prerequisites
-
+DO NOT MERGE THIS
 This series assumes you are comfortable with:
 
 *   Standard Vulkan initialization (Instance, Device, Queues).
