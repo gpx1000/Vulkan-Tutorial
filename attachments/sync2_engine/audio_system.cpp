@@ -48,7 +48,6 @@
 #include "engine.h"
 #include "renderer.h"
 
-#if !defined(PLATFORM_ANDROID)
 // Rotate a world-space direction into the listener's frame (+X right, +Y up, +Z ahead).
 // orientation is {forward, up}; right = forward x up. This is the frame the HRTF table is laid out in.
 // Leaves the direction unchanged if the orientation is degenerate.
@@ -81,6 +80,7 @@ static void WorldToListenerSpace(float direction[3], const float orientation[6])
   direction[2] = local[2];
 }
 
+#if !defined(PLATFORM_ANDROID)
 // OpenAL error checking utility
 static void CheckOpenALError(const std::string& operation) {
   ALenum error = alGetError();
